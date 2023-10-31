@@ -17,6 +17,8 @@ from cobaya.typing import InputDict, LiteralFalse
 from cobaya.output import get_output
 from cobaya.model import Model
 from cobaya.sampler import get_sampler_name_and_class, check_sampler_info, Sampler
+from cobaya.profile import profiled_run, check_if_profiled, get_profiled_values, \
+    get_profiled_Model
 from cobaya.log import logger_setup, is_debug, get_logger, LoggedError
 from cobaya.yaml import yaml_dump
 from cobaya.input import update_info, load_info_overrides
@@ -133,6 +135,14 @@ def run(info_or_yaml_or_file: Union[InputDict, str, os.PathLike],
                 # Re-dump the updated info, now containing parameter routes and version
                 updated_info = recursive_update(updated_info, model.info())
                 out.check_and_dump_info(None, updated_info, check_compatible=False)
+
+                if check_if_profiled(updated_info):
+                    updated_info, samplers = profiled_run(updated_info, model,
+                                                          sampler_name, sampler_class,
+                                                          out, packages_path_input,
+                                                          mpi, logger_run)
+                    return updated_info, samplers
+
                 sampler = sampler_class(updated_info["sampler"][sampler_name],
                                         model, out, name=sampler_name,
                                         packages_path=info.get("packages_path"))
