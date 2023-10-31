@@ -42,6 +42,13 @@ def is_derived_param(info_param: ParamInput) -> bool:
     return expand_info_param(info_param).get("derived", False) is not False
 
 
+def is_profiled_param(info_param: ParamInput) -> bool:
+    """
+    Returns True if the parameter is saved as a profiled one.
+    """
+    return expand_info_param(info_param).get("profiled", False) is not False
+
+
 def expand_info_param(info_param: ParamInput, default_derived=True) -> ParamDict:
     """
     Expands the info of a parameter, from the user-friendly, shorter format
@@ -127,6 +134,7 @@ class Parameterization(HasLogger):
         self._derived_funcs = {}
         self._derived_args = {}
         self._derived_dependencies: Dict[str, Set[str]] = {}
+        self._profiled: ParamValuesDict = {}
         # Notice here that expand_info_param *always* adds a "derived":True tag
         # to infos without "prior" or "value", and a "value" field
         # to fixed params
@@ -152,6 +160,16 @@ class Parameterization(HasLogger):
                 if info.get("drop"):
                     self._dropped.add(p)
                 self._sampled_renames[p] = str_to_list(info.get("renames") or [])
+            if is_profiled_param(info):
+                if not isinstance(info["value"], list):
+                    raise LoggedError(
+                        self.log,
+                        "Parameter '%s' has to be profiled, but you did not pass "
+                        "a list of profiled values; instead you passed a %r",
+                        p,
+                        info["value"].__class__.__name__)
+                self._profiled[p] = list(info["value"])
+                self._input[p] = self._profiled[p]
             if is_derived_param(info):
                 self._derived[p] = np.nan
                 # Dynamical parameters whose value we want to save
@@ -254,6 +272,9 @@ class Parameterization(HasLogger):
     def derived_params_info(self) -> ExpandedParamsDict:
         return {p: deepcopy_where_possible(info) for p, info
                 in self._infos.items() if p in self._derived}
+
+    def profiled_params(self) -> ParamValuesDict:
+        return set(self._profiled.copy())
 
     def sampled_input_dependence(self) -> Dict[str, List[str]]:
         return deepcopy(self._sampled_input_dependence)
