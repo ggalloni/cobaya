@@ -15,6 +15,7 @@ import numpy as np
 from cobaya.log import HasLogger, LoggedError
 from cobaya.model import Model, get_model
 from cobaya.output import Output
+from cobaya.sampler import Sampler
 from cobaya.parameterization import is_profiled_param
 from cobaya.tools import deepcopy_where_possible, recursive_update
 from cobaya.yaml import yaml_load_file, yaml_dump_file
@@ -24,7 +25,9 @@ from cobaya.typing import InputDict
 
 
 def check_if_profiled(info: InputDict) -> bool:
-    # This checks whether a profiled parameter is present in the input dictionary
+    """
+    This checks whether a profiled parameter is present in the input dictionary
+    """
     info_params = info["params"]
     is_profiled = []
     for param in info_params:
@@ -35,7 +38,9 @@ def check_if_profiled(info: InputDict) -> bool:
 
 
 def get_profiled_values(info: InputDict) -> Tuple[str, list]:
-    # This returns the profiled parameter and the requested values
+    """
+    This returns the profiled parameter and the requested values
+    """
     info_params = info["params"]
     for param in info_params:
         if is_profiled_param(info_params[param]):
@@ -44,16 +49,19 @@ def get_profiled_values(info: InputDict) -> Tuple[str, list]:
 
 
 def get_profiled_Model(oldModel: Model, profiled_param: str, value: float) -> Model:
-    # This returns a new model with the profiled parameter fixed to the requested value
+    """
+    This returns a new model with the profiled parameter fixed to the requested value
+    """
     info_model = oldModel.info()
-
     info_model["params"][profiled_param]["value"] = value
     info_model["params"][profiled_param]["profiled"] = False
     return get_model(info_model)
 
 
-def initialize_results(profiled_param):
-    # This initializes the dictionary that will contain the results of the run
+def initialize_results(profiled_param: str) -> Tuple[dict, dict]:
+    """
+    This initializes the dictionary that will contain the results of the run
+    """
     minima_results = {}
     minima_results[f"{profiled_param}"] = {
         "value": [],
@@ -72,9 +80,13 @@ def initialize_results(profiled_param):
 
 
 def get_results(
-    profiled_param, value, sampler, sampled_params, minima_results, minima_results_yaml
+    profiled_param: str, value: float, sampler: Sampler,
+    sampled_params: list, minima_results: dict,
+    minima_results_yaml: dict
 ):
-    # This fills the dictionary with the results of the run
+    """
+    This fills the dictionary with the results of the run
+    """
     minima_results[f"{profiled_param}"]["value"].append(value)
     minima_results[f"{profiled_param}"]["minimum"].append(sampler.result.fun)
     minima_results[f"{profiled_param}"]["full_set_minima"].append(
@@ -108,7 +120,9 @@ def get_results(
 
 
 def save_results(output: Output, minima_results: dict):
-    # This saves the results of the run in a binary file
+    """
+    This saves the results of the run in a binary file
+    """
     file = output.prefix + ".output_minima.pkl"
     if os.path.isfile(file):
         with open(file, "rb") as f:
@@ -151,7 +165,9 @@ def save_results(output: Output, minima_results: dict):
 
 
 def save_results_yaml(output: Output, minima_results: dict):
-    # This saves the results of the run in a yaml file so that it is human readable
+    """
+    This saves part of the results of the run in a yaml file so that it is human readable
+    """
     file = output.prefix + ".output_minima.yaml"
     if os.path.isfile(file):
         old_minima_results = yaml_load_file(file)
@@ -183,12 +199,24 @@ def profiled_run(
     mpi,
     logger_run,
 ) -> None:
-    # This is the main function that performs multiple runs of the sampler to profile a parameter and save the results
+    """
+    This is the main function that performs multiple runs of the sampler to profile a parameter and save the results
+    """
+    # This stores a copy of the input dictionary
     complete_info = deepcopy_where_possible(info)
+
+    # This is the list of samplers that will be returned
     samplers = []
 
+    # This collects the profiled parameter and the values to profile
     profiled_param, profiled_values = get_profiled_values(info)
+
+    # This initializes the dictionary that will contain the results of the runs
+    minima, minima_yaml = initialize_results(profiled_param)
+
+    # This loops over the values to profile
     for value in profiled_values:
+        # This updates the input dictionary with the value to profile and get the new model
         info["params"][profiled_param]["value"] = value
         profiled_model = get_profiled_Model(model, profiled_param, value)
 
@@ -202,7 +230,6 @@ def profiled_run(
         info["sampler"][sampler_name] = recursive_update(
             info["sampler"][sampler_name], sampler.info()
         )
-
         out.check_and_dump_info(None, info, check_compatible=False)
 
         mpi.sync_processes()
@@ -216,16 +243,21 @@ def profiled_run(
 
         sampler.run()
 
+        # This saves the results of the run
         if mpi.is_main_process():
             samplers.append(sampler)
 
-            minima, minima_yaml = initialize_results(profiled_param)
+            # This collects the sampled parameters)
             sampled_params = list(
                 profiled_model.parameterization.sampled_params().keys()
             )
+
+            # This updates the dictionaries with the results of the run
             minima, minima_yaml = get_results(
                 profiled_param, value, sampler, sampled_params, minima, minima_yaml
             )
+
+            # Loads, updates and saves the results of the run
             save_results(out, minima)
             save_results_yaml(out, minima_yaml)
 
