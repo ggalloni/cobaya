@@ -39,7 +39,7 @@ ParamsDict = Dict[str, ParamInput]
 ExpandedParamsDict = Dict[str, 'ParamDict']
 
 partags = {"prior", "ref", "proposal", "value", "drop",
-           "derived", "latex", "renames", "min", "max"}
+           "derived", "profiled", "latex", "renames", "min", "max"}
 
 LiteralFalse = Literal[False]
 ModelBlock = Literal["theory", "likelihood", "prior", "params"]
