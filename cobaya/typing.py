@@ -59,12 +59,13 @@ class SciPyMinMaxDict(TypedDict, total=False):
 
 
 class ParamDict(TypedDict, total=False):
-    value: Union[float, Callable, str]
+    value: Union[float, Sequence[float], Callable, str]
     derived: Union[bool, str, Callable]
     prior: Union[None, Sequence[float], SciPyDistDict, SciPyMinMaxDict]
     ref: Union[None, Sequence[float], SciPyDistDict, SciPyMinMaxDict]
     proposal: Optional[float]
     renames: Union[str, Sequence[str]]
+    profiled: bool
     latex: str
     drop: bool  # true if parameter should not be available for assignment to theories
     min: float  # hard bounds (does not affect prior)

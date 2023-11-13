@@ -49,7 +49,8 @@ def is_profiled_param(info_param: ParamInput) -> bool:
     return expand_info_param(info_param).get("profiled", False) is not False
 
 
-def expand_info_param(info_param: ParamInput, default_derived=True) -> ParamDict:
+def expand_info_param(info_param: ParamInput, default_derived=True,
+                      default_profiled=False) -> ParamDict:
     """
     Expands the info of a parameter, from the user-friendly, shorter format
     to a more unambiguous one.
@@ -75,6 +76,8 @@ def expand_info_param(info_param: ParamInput, default_derived=True) -> ParamDict
             info_param = {"value": info_param}
     if all(f not in info_param for f in ["prior", "value", "derived"]):
         info_param["derived"] = default_derived
+    if "profiled" not in info_param:
+        info_param["profiled"] = default_profiled
     # Dynamical input parameters: save as derived by default
     value = info_param.get("value")
     if isinstance(value, str) or callable(value):
@@ -94,6 +97,9 @@ def reduce_info_param(info_param: ParamDict) -> ParamInput:
     # All parameters without a prior are derived parameters unless otherwise specified
     if info_param.get("derived") is True:
         info_param.pop("derived")
+    # All parameters are not profiled parameters unless otherwise specified
+    if info_param.get("profiled") is False:
+        info_param.pop("profiled")
     # Fixed parameters with single "value" key
     if list(info_param) == ["value"] and not callable(info_param["value"]):
         return info_param["value"]
@@ -138,6 +144,7 @@ class Parameterization(HasLogger):
         # Notice here that expand_info_param *always* adds a "derived":True tag
         # to infos without "prior" or "value", and a "value" field
         # to fixed params
+        # also, it adds a "profiled":False tag to infos without "profiled"
         for p, info in info_params.items():
             if isinstance(info, Mapping) and not set(info).issubset(partags):
                 raise LoggedError(self.log, "Parameter '%s' has unknown options %s",

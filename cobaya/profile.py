@@ -24,7 +24,7 @@ from cobaya.yaml import yaml_load_file, yaml_dump_file
 from cobaya.typing import InputDict
 
 
-def check_if_profiled(info: InputDict) -> bool:
+def check_if_any_profiled(info: InputDict) -> bool:
     """
     This checks whether a profiled parameter is present in the input dictionary
     """
