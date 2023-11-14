@@ -1,5 +1,6 @@
 # Profiling of a random Gaussian likelihood using the minimize sampler.
 
+import dill
 import numpy as np
 import pytest
 import os
@@ -44,3 +45,22 @@ def test_profile_gaussian(tmpdir):
         assert errors[1] < 0.01
         assert errors[2] < 0.01
         return
+
+
+@mpi.sync_errors
+def test_profile_output(tmpdir):
+    for method in reversed(valid_methods):
+        NoisyCovLike.noise = 0.005 if method == 'bobyqa' else 0
+        info: InputDict = {'likelihood': {'like': NoisyCovLike},
+                           "sampler": {"minimize": {"ignore_prior": True,
+                                                    "method": method}}}
+        info['output'] = os.path.join(tmpdir, 'testprof')
+        samplers = run(info)[1]
+        if mpi.is_main_process():
+            filename = info['output'] + '.output_minima.dill_pickle'
+            with open(filename, "rb") as f:
+                res = dill.load(f)
+            assert isinstance(res, dict)
+            keys = list(res.keys())
+            expected_keys = ['value', 'minimum', 'full_set_of_mins', 'hessian', 'other_params']
+            assert all(k in expected_keys for k in keys)
