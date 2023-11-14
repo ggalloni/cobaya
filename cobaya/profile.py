@@ -210,12 +210,17 @@ def profiled_run(
 
     # This collects the profiled parameter and the requested values to profile
     profiled_param, profiled_values = get_profiled_values(info)
+    out.log.info("Profiling requested.\nParameter: %s\nValues: %s",
+                    profiled_param, profiled_values)
 
     # This initializes the dictionary that will contain the results of the runs
     minima, minima_yaml = initialize_results(profiled_param)
 
     # This loops over the values to profile
+    out.log.info("Start looping on values...")
     for value in profiled_values:
+        out.log.info("Run %s/%s, with %s = %s", profiled_values.index(value) + 1,
+                        len(profiled_values), profiled_param, value)
         # This updates the input dictionary with the value to profile and get the new model
         info["params"][profiled_param]["value"] = value
         profiled_model = get_profiled_Model(model, profiled_param, value)
@@ -242,6 +247,9 @@ def profiled_run(
             return info, sampler
 
         sampler.run()
+
+        out.log.info("Finished run %s/%s.", profiled_values.index(value) + 1,
+                        len(profiled_values))
 
         # This saves the results of the run
         if mpi.is_main_process():
