@@ -30,7 +30,7 @@ class NoisyCovLike(Likelihood):
 
 @mpi.sync_errors
 def test_profile_gaussian(tmpdir):
-    maxlogliks = [1, 0, 1]
+    maxlogliks = [0.5, 0, 0.5]
     for method in reversed(valid_methods):
         NoisyCovLike.noise = 0.005 if method == 'bobyqa' else 0
         info: InputDict = {'likelihood': {'like': NoisyCovLike},
@@ -40,7 +40,7 @@ def test_profile_gaussian(tmpdir):
         errors = []
         for i, sampler in enumerate(samplers):
             products = sampler.products()
-            errors.append(abs(maxlogliks[i] - -products["minimum"]["minuslogpost"]))
+            errors.append(abs(maxlogliks[i] - products["minimum"]["minuslogpost"]))
         assert errors[0] < 0.01
         assert errors[1] < 0.01
         assert errors[2] < 0.01
