@@ -26,7 +26,7 @@ from cobaya.typing import InputDict
 
 def check_if_any_profiled(info: InputDict) -> bool:
     """
-    This checks whether a profiled parameter is present in the input dictionary
+    This checks whether a profiled parameter is present in the input dictionary.
     """
     info_params = info["params"]
     is_profiled = []
@@ -39,7 +39,7 @@ def check_if_any_profiled(info: InputDict) -> bool:
 
 def get_profiled_values(info: InputDict) -> Tuple[str, list]:
     """
-    This returns the profiled parameter and the requested values
+    This returns the profiled parameter and the requested values.
     """
     info_params = info["params"]
     for param in info_params:
@@ -50,7 +50,7 @@ def get_profiled_values(info: InputDict) -> Tuple[str, list]:
 
 def get_profiled_Model(oldModel: Model, profiled_param: str, value: float) -> Model:
     """
-    This returns a new model with the profiled parameter fixed to the requested value
+    This returns a new model with the profiled parameter fixed to one of the requested values.
     """
     info_model = oldModel.info()
     info_model["params"][profiled_param]["value"] = value
@@ -60,7 +60,7 @@ def get_profiled_Model(oldModel: Model, profiled_param: str, value: float) -> Mo
 
 def initialize_results(profiled_param: str) -> Tuple[dict, dict]:
     """
-    This initializes the dictionary that will contain the results of the run
+    This initializes the dictionary that will contain the results of the run.
     """
     minima_results = {}
     minima_results[f"{profiled_param}"] = {
@@ -68,13 +68,13 @@ def initialize_results(profiled_param: str) -> Tuple[dict, dict]:
         "minimum": [],
         "hessian": [],
         "other_params": [],
-        "full_set_minima": [],
+        "full_set_of_mins": [],
     }
     minima_results_yaml = {}
     minima_results_yaml[f"{profiled_param}"] = {
         "value": [],
         "minimum": [],
-        "full_set_minima": [],
+        "full_set_of_mins": [],
     }
     return minima_results, minima_results_yaml
 
@@ -85,7 +85,7 @@ def get_results(
     minima_results_yaml: dict
 ):
     """
-    This fills the dictionary with the results of the run
+    This fills the results dictionary with the outcome of the single run.
     """
     minima_results[f"{profiled_param}"]["value"].append(value)
     minima_results[f"{profiled_param}"]["minimum"].append(sampler.result.fun)
@@ -121,9 +121,9 @@ def get_results(
 
 def save_results(output: Output, minima_results: dict):
     """
-    This saves the results of the run in a binary file
+    This saves the results of the run in a binary file.
     """
-    file = output.prefix + ".output_minima.pkl"
+    file = output.prefix + ".output_minima.dill"
     if os.path.isfile(file):
         with open(file, "rb") as f:
             try:
@@ -166,7 +166,7 @@ def save_results(output: Output, minima_results: dict):
 
 def save_results_yaml(output: Output, minima_results: dict):
     """
-    This saves part of the results of the run in a yaml file so that it is human readable
+    This saves part of the results of the run in a yaml file, so that it is human readable.
     """
     file = output.prefix + ".output_minima.yaml"
     if os.path.isfile(file):
@@ -200,7 +200,7 @@ def profiled_run(
     logger_run,
 ) -> None:
     """
-    This is the main function that performs multiple runs of the sampler to profile a parameter and save the results
+    This is the main function that performs multiple runs of the sampler to profile a parameter and save the results.
     """
     # This stores a copy of the input dictionary
     complete_info = deepcopy_where_possible(info)
@@ -208,7 +208,7 @@ def profiled_run(
     # This is the list of samplers that will be returned
     samplers = []
 
-    # This collects the profiled parameter and the values to profile
+    # This collects the profiled parameter and the requested values to profile
     profiled_param, profiled_values = get_profiled_values(info)
 
     # This initializes the dictionary that will contain the results of the runs
@@ -247,7 +247,7 @@ def profiled_run(
         if mpi.is_main_process():
             samplers.append(sampler)
 
-            # This collects the sampled parameters)
+            # This collects the sampled parameters
             sampled_params = list(
                 profiled_model.parameterization.sampled_params().keys()
             )
