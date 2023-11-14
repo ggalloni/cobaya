@@ -116,21 +116,22 @@ def save_results(output: Output, minima_results: dict):
     """
     This saves the results of the run in a binary file.
     """
+    try:
+        import dill
+    except ImportError:
+        raise LoggedError(
+            output.log,
+            'Install "dill" to save reproducible options file.',
+        )
     file = output.prefix + ".output_minima" + Extension.dill
-    with open(file, "rb") as f:
-        try:
-            import dill
-            old_minima_results = dill.load(f)
-        except ImportError:
-            raise LoggedError(
-                output.log,
-                'Install "dill" to save reproducible options file.',
-            )
-        except EOFError:
-            with open(file, "wb") as f:
-                dill.dump(minima_results, f)
-            return
     if os.path.isfile(file):
+        with open(file, "rb") as f:
+            try:
+                old_minima_results = dill.load(f)
+            except EOFError:
+                with open(file, "wb") as f:
+                    dill.dump(minima_results, f)
+                return
         for key in minima_results.keys():
             if key in old_minima_results.keys():
                 for idx, val in enumerate(old_minima_results[key]["value"]):
