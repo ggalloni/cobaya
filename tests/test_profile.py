@@ -20,7 +20,7 @@ _inv_cov = np.linalg.inv(cov)
 
 class NoisyCovLike(Likelihood):
     params = {'a': [0, 1, 0.5, 0.3, 0.08], 'b': [0, 1, 0.5, 0.3, 0.08]}
-    params['c'] = {'value': [mean-sigma_c, mean, mean+sigma_c], 'profiled': True}
+    params['c'] = {'value': [mean[2]-sigma_c, mean[2], mean[2]+sigma_c], 'profiled': True}
     noise = 0
 
     def logp(self, **params_values):
