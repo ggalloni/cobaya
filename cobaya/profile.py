@@ -226,8 +226,8 @@ def profiled_run(
             minima = get_results(profiled_param, value, sampler, minima)
 
             # Loads, updates and saves the results of the run
-            print(minima)
-            # save_results(out, minima)
+            if out:
+                save_results(out, minima)
 
     out.check_and_dump_info(None, info, check_compatible=False)
 
