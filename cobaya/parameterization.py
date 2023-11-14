@@ -25,7 +25,10 @@ def is_fixed_or_function_param(info_param: ParamInput) -> bool:
     """
     Returns True if the parameter has been fixed to a value or through a function.
     """
-    return expand_info_param(info_param).get("value") is not None
+    return (
+        expand_info_param(info_param).get("value") is not None
+        and expand_info_param(info_param).get("profiled", False) is False
+    )
 
 
 def is_sampled_param(info_param: ParamInput) -> bool:
