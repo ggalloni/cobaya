@@ -85,7 +85,7 @@ def get_results(
     minima_results[f"{profiled_param}"]["value"].append(value)
 
     minima_results[f"{profiled_param}"]["minimum"].append(
-        sampler.minimum.data.get("chi2")/2 if sampler.ignore_prior
+        sampler.minimum.data.get("chi2") / 2 if sampler.ignore_prior
         else sampler.minimum.data.get("minuslogpost"))
 
     minima_results[f"{profiled_param}"]["full_set_of_mins"].append(
@@ -226,7 +226,8 @@ def profiled_run(
             minima = get_results(profiled_param, value, sampler, minima)
 
             # Loads, updates and saves the results of the run
-            save_results(out, minima)
+            print(minima)
+            # save_results(out, minima)
 
     out.check_and_dump_info(None, info, check_compatible=False)
 
