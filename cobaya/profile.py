@@ -98,10 +98,10 @@ def get_new_result(
     This fills the results dictionary with the outcome of the single run.
     """
     new_result = {}
-    
+
     minimum = float(sampler.minimum.data.get("chi2").to_numpy()[0] / 2
     if sampler.ignore_prior else sampler.minimum.data.get("minuslogpost").to_numpy()[0])
-    
+
     hess_attr_ = hess_attr[sampler.method.lower()]
     transformation_mat = sampler._inv_affine_transform_matrix
     hessian = getattr(sampler.result, hess_attr_)
@@ -110,13 +110,13 @@ def get_new_result(
     if sampler.method.lower() == "scipy":
         hessian = np.linalg.inv(hessian.todense())
     hessian = transformation_mat @ hessian @ transformation_mat.T
-    
+
     other_params_values = dict(
         zip(sampler.minimum.sampled_params + sampler.minimum.derived_params,
             list(sampler.result.x)
             + list(sampler.model.logposterior(sampler.result.x, cached=False).derived))
         )
-    
+
     new_result[f"{profiled_param}"] = {
         "values": [value],
         "minima": [minimum],
@@ -173,7 +173,7 @@ def save_results(output: Output, minima_results: dict):
         )
     file = output.add_suffix("output_minima", separator=".") + ".dill_pickle"
     with open(file, "wb") as f:
-                    dill.dump(minima_results, f)
+        dill.dump(minima_results, f)
     return
 
 
