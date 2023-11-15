@@ -62,36 +62,46 @@ def get_profiled_Model(oldModel: Model, profiled_param: str, value: float) -> Mo
     return get_model(info_model)
 
 
-def initialize_results(profiled_param: str) -> Tuple[dict, dict]:
+def initialize_results(profiled_param: str, output: Output) -> Tuple[dict, dict]:
     """
     This initializes the dictionary that will contain the results of the run.
     """
     minima_results = {}
     minima_results[f"{profiled_param}"] = {
-        "value": [],
-        "minimum": [],
-        "hessian": [],
+        "values": [],
+        "minima": [],
+        "hessians": [],
         "other_params": [],
-        "full_set_of_mins": [],
+        "full_sets_of_mins": [],
     }
+
+    file = output.add_suffix("output_minima", separator=".") + ".dill_pickle"
+    if os.path.isfile(file):
+        try:
+            import dill
+        except ImportError:
+            raise LoggedError(
+                output.log,
+                'Install "dill" to save reproducible options file.',
+            )
+        with open(file, "rb") as f:
+            try:
+                minima_results = dill.load(f)
+            except EOFError:
+                pass
     return minima_results
 
 
-def get_results(
-    profiled_param: str, value: float, sampler: Sampler, minima_results: dict):
+def get_new_result(
+    profiled_param: str, value: float, sampler: Sampler):
     """
     This fills the results dictionary with the outcome of the single run.
     """
-    minima_results[f"{profiled_param}"]["value"].append(value)
-
-    minima_results[f"{profiled_param}"]["minimum"].append(
-        sampler.minimum.data.get("chi2") / 2 if sampler.ignore_prior
-        else sampler.minimum.data.get("minuslogpost"))
-
-    minima_results[f"{profiled_param}"]["full_set_of_mins"].append(
-        sampler.full_set_of_mins
-    )
-
+    new_result = {}
+    
+    minimum = float(sampler.minimum.data.get("chi2").to_numpy()[0] / 2
+    if sampler.ignore_prior else sampler.minimum.data.get("minuslogpost").to_numpy()[0])
+    
     hess_attr_ = hess_attr[sampler.method.lower()]
     transformation_mat = sampler._inv_affine_transform_matrix
     hessian = getattr(sampler.result, hess_attr_)
@@ -100,16 +110,54 @@ def get_results(
     if sampler.method.lower() == "scipy":
         hessian = np.linalg.inv(hessian.todense())
     hessian = transformation_mat @ hessian @ transformation_mat.T
-    minima_results[profiled_param]["hessian"].append(hessian)
+    
+    other_params_values = dict(
+        zip(sampler.minimum.sampled_params + sampler.minimum.derived_params,
+            list(sampler.result.x)
+            + list(sampler.model.logposterior(sampler.result.x, cached=False).derived))
+        )
+    
+    new_result[f"{profiled_param}"] = {
+        "values": [value],
+        "minima": [minimum],
+        "full_sets_of_mins": [sampler.full_set_of_mins],
+        "hessians": [hessian],
+        "other_params": [other_params_values]
+    }
+    return new_result
 
-    x_min = sampler.inv_affine_transform(sampler.result.x)
-    minima_results[f"{profiled_param}"]["other_params"].append(
-        dict(zip(sampler.minimum.sampled_params +
-                               sampler.minimum.derived_params,
-                               list(x_min) +
-                               list(sampler.model.logposterior(x_min, cached=False).derived)))
-    )
-    return minima_results
+
+def merge_results(old_results: dict, new_result: dict):
+    for key in new_result.keys():
+        if key in old_results.keys():
+            for idx, val in enumerate(new_result[key]["values"]):
+                if val not in old_results[key]["values"]:
+                    old_results[key]["values"].append(val)
+                    old_results[key]["minima"].append(new_result[key]["minima"][idx])
+                    old_results[key]["full_sets_of_mins"].append(
+                        new_result[key]["full_sets_of_mins"][idx]
+                    )
+                    old_results[key]["hessians"].append(new_result[key]["hessians"][idx])
+                    old_results[key]["other_params"].append(
+                        new_result[key]["other_params"][idx]
+                    )
+                else:
+                    idx_old = old_results[key]["values"].index(val)
+                    old_results[key]["minima"][idx_old] = new_result[key]["minima"][
+                        idx
+                    ]
+                    old_results[key]["full_sets_of_mins"][idx_old] = new_result[key][
+                        "full_sets_of_mins"
+                    ][idx]
+                    old_results[key]["hessians"][idx_old] = new_result[key]["hessians"][
+                        idx
+                    ]
+                    old_results[key]["other_params"][idx_old] = new_result[key][
+                        "other_params"
+                    ][idx]
+        else:
+            old_results[key] = new_result[key].copy()
+    return old_results
 
 
 def save_results(output: Output, minima_results: dict):
@@ -123,38 +171,9 @@ def save_results(output: Output, minima_results: dict):
             output.log,
             'Install "dill" to save reproducible options file.',
         )
-    file = output.prefix + ".output_minima" + Extension.dill
-    if os.path.isfile(file):
-        with open(file, "rb") as f:
-            try:
-                old_minima_results = dill.load(f)
-            except EOFError:
-                with open(file, "wb") as f:
+    file = output.add_suffix("output_minima", separator=".") + ".dill_pickle"
+    with open(file, "wb") as f:
                     dill.dump(minima_results, f)
-                return
-        for key in minima_results.keys():
-            if key in old_minima_results.keys():
-                for idx, val in enumerate(old_minima_results[key]["value"]):
-                    if val not in minima_results[key]["value"]:
-                        minima_results[key]["value"].append(val)
-                        minima_results[key]["minimum"].append(
-                            old_minima_results[key]["minimum"][idx]
-                        )
-                        minima_results[key]["full_set_of_mins"].append(
-                            old_minima_results[key]["full_set_of_mins"][idx]
-                        )
-                        minima_results[key]["hessian"].append(
-                            old_minima_results[key]["hessian"][idx]
-                        )
-                        minima_results[key]["other_params"].append(
-                            old_minima_results[key]["other_params"][idx]
-                        )
-        old_minima_results = {**old_minima_results, **minima_results}
-        with open(file, "wb") as f:
-            dill.dump(old_minima_results, f)
-    else:
-        with open(file, "wb") as f:
-            dill.dump(minima_results, f)
     return
 
 
@@ -182,8 +201,10 @@ def profiled_run(
     out.log.info("Profiling requested.\nParameter: %s\nValues: %s",
                     profiled_param, profiled_values)
 
-    # This initializes the dictionary that will contain the results of the runs
-    minima = initialize_results(profiled_param)
+    # This initializes the dictionary that will contain the results of the runs if
+    # an output is requested
+    if out:
+        minima = initialize_results(profiled_param, out)
 
     # This loops over the values to profile
     out.log.info("Start looping on values...")
@@ -223,11 +244,10 @@ def profiled_run(
         if mpi.is_main_process():
             samplers.append(sampler)
 
-            # This updates the dictionaries with the results of the run
-            minima = get_results(profiled_param, value, sampler, minima)
-
-            # Loads, updates and saves the results of the run
+            # Loads, updates and saves the results of the run if requested
             if out:
+                new_minimum = get_new_result(profiled_param, value, sampler)
+                minima = merge_results(minima, new_minimum)
                 save_results(out, minima)
 
     out.check_and_dump_info(None, info, check_compatible=False)
