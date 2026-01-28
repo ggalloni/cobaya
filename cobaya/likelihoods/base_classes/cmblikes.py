@@ -335,12 +335,13 @@ class CMBlikes(DataSetLikelihood):
         self.full_bandpower_headers, self.full_bandpowers, self.bandpowers = (
             self.read_cl_array(ini, "cl_hat", return_full=True)
         )
-        if self.like_approx == "HL":
+        if self.like_approx in ("HL", "mHL"):
             self.cl_fiducial = self.read_cl_array(ini, "cl_fiducial")
         else:
             self.cl_fiducial = None
         if self.like_approx == "mHL":
             self.marginalized_spectra = ini.list("marg_spectra", default=[])
+            self.log.warning("Marginalizing over spectra: %s", self.marginalized_spectra)
         includes_noise = ini.bool("cl_hat_includes_noise", False)
         self.cl_noise = None
         if self.like_approx != "gaussian" or includes_noise:
@@ -697,7 +698,7 @@ class CMBlikes(DataSetLikelihood):
             if self.like_approx == "exact":
                 chisq += self.exact_chi_sq(C, self.bandpower_matrix[b], self.bin_min + b)
                 continue
-            elif self.like_approx == "HL":
+            elif self.like_approx in ("HL", "mHL"):
                 try:
                     self.transform(
                         C, self.bandpower_matrix[b], self.fiducial_sqrt_matrix[b]
