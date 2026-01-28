@@ -339,6 +339,8 @@ class CMBlikes(DataSetLikelihood):
             self.cl_fiducial = self.read_cl_array(ini, "cl_fiducial")
         else:
             self.cl_fiducial = None
+        if self.like_approx == "mHL":
+            self.marginalized_spectra = ini.list("marg_spectra", default=[])
         includes_noise = ini.bool("cl_hat_includes_noise", False)
         self.cl_noise = None
         if self.like_approx != "gaussian" or includes_noise:
@@ -379,6 +381,14 @@ class CMBlikes(DataSetLikelihood):
         else:
             self.cov = self.ReadCovmat(ini)
             self.covinv = np.linalg.inv(self.cov)
+            if self.marginalized_spectra:
+                self.marginalized_full_indices = []
+                for b in range(self.nbins_used):
+                    for idx in self.marginalized_cov_indices:
+                        self.marginalized_full_indices.append(b * self.ncl_used + idx)
+                cov_reduced = np.delete(self.cov, self.marginalized_full_indices, axis=0)
+                cov_reduced = np.delete(cov_reduced, self.marginalized_full_indices, axis=1)
+                self.covinv_marginalized = np.linalg.inv(cov_reduced)
         if "linear_correction_fiducial_file" in ini.params:
             self.fid_correction = self.read_cl_array(ini, "linear_correction_fiducial")
             self.linear_correction = self.read_bin_windows(
@@ -423,6 +433,17 @@ class CMBlikes(DataSetLikelihood):
         self.full_cov = np.loadtxt(ini.relativeFileName("covmat_fiducial"))
         covmat_scale = ini.float("covmat_scale", 1.0)
         cl_in_index = self.UseString_to_cols(covmat_cl)
+        if self.like_approx == "mHL":
+            self.marginalized_indices = []
+            for spec in self.marginalized_spectra:
+                if spec not in covmat_cl:
+                    raise LoggedError(
+                        self.log,
+                        "marginalized spectrum %s not found in covmat_cl" % spec,
+                    )
+                else:
+                    index = covmat_cl.split().index(spec)
+                    self.marginalized_indices.append(int(index))
         self.ncl_used = np.sum(cl_in_index >= 0)
         self.cl_used_index = np.zeros(self.ncl_used, dtype=int)
         cov_cl_used = np.zeros(self.ncl_used, dtype=int)
@@ -432,6 +453,13 @@ class CMBlikes(DataSetLikelihood):
                 self.cl_used_index[ix] = index
                 cov_cl_used[ix] = i
                 ix += 1
+        if self.like_approx == "mHL":
+            self.marginalized_cov_indices = []
+            for marg_idx in self.marginalized_indices:
+                for ix, spectrum_idx in enumerate(cov_cl_used):
+                    if spectrum_idx == marg_idx:
+                        self.marginalized_cov_indices.append(ix)
+                        break
         if self.binned:
             num_in = len(cl_in_index)
             pcov = np.empty(
@@ -683,6 +711,9 @@ class CMBlikes(DataSetLikelihood):
             big_x[b * self.ncl_used : (b + 1) * self.ncl_used] = vecp[self.cl_used_index]
         if self.like_approx == "exact":
             return -0.5 * chisq
+        elif self.like_approx == "mHL":
+            big_x_reduced = np.delete(big_x, self.marginalized_full_indices)
+            return -0.5 * self._fast_chi_squared(self.covinv_marginalized, big_x_reduced)
         return -0.5 * self._fast_chi_squared(self.covinv, big_x)
 
 
