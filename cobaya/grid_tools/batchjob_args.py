@@ -36,7 +36,7 @@ class BatchArgs:
         self.notall = notall
         self.doplots = plots
 
-    def parseForBatch(self, vals=None):
+    def parseForBatch(self, vals=None) -> tuple:
         if isinstance(vals, str):
             vals = [vals]
 

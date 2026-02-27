@@ -507,35 +507,41 @@ class CAMB(BoltzmannBase):
                 self.add_to_redshifts(redshifts)
                 var_pair = k[1:]
 
-                def get_sigmaR(results, **tmp):
-                    _indices = self._sigmaR_z_indices.get(var_pair)
-                    if _indices is None or list(_indices) == []:
-                        z_indices = []
-                        calc = np.array(
-                            results.Params.Transfer.PK_redshifts[
-                                : results.Params.Transfer.PK_num_redshifts
-                            ]
+                def make_get_sigmaR(redshifts, var_pair):
+                    def get_sigmaR(results, **tmp):
+                        _indices = self._sigmaR_z_indices.get(var_pair)
+                        if _indices is None or list(_indices) == []:
+                            z_indices = []
+                            calc = np.array(
+                                results.Params.Transfer.PK_redshifts[
+                                    : results.Params.Transfer.PK_num_redshifts
+                                ]
+                            )
+                            for z in redshifts:
+                                for i, zcalc in enumerate(calc):
+                                    if np.isclose(zcalc, z, rtol=1e-4):
+                                        z_indices += [i]
+                                        break
+                                else:
+                                    raise LoggedError(
+                                        self.log,
+                                        "sigma_R redshift not found in computed "
+                                        "P_K array %s",
+                                        z,
+                                    )
+                            _indices = np.array(z_indices, dtype=np.int32)
+                            self._sigmaR_z_indices[var_pair] = _indices
+                        R, z, sigma = results.get_sigmaR(
+                            hubble_units=False, return_R_z=True, z_indices=_indices, **tmp
                         )
-                        for z in redshifts:
-                            for i, zcalc in enumerate(calc):
-                                if np.isclose(zcalc, z, rtol=1e-4):
-                                    z_indices += [i]
-                                    break
-                            else:
-                                raise LoggedError(
-                                    self.log,
-                                    "sigma_R redshift not foundin computed P_K array %s",
-                                    z,
-                                )
-                        _indices = np.array(z_indices, dtype=np.int32)
-                        self._sigmaR_z_indices[var_pair] = _indices
-                    R, z, sigma = results.get_sigmaR(
-                        hubble_units=False, return_R_z=True, z_indices=_indices, **tmp
-                    )
-                    return z, R, sigma
+                        return z, R, sigma
+
+                    return get_sigmaR
 
                 kwargs.update(dict(zip(["var1", "var2"], var_pair)))
-                self.collectors[k] = Collector(method=get_sigmaR, kwargs=kwargs)
+                self.collectors[k] = Collector(
+                    method=make_get_sigmaR(redshifts, var_pair), kwargs=kwargs
+                )
                 self.needs_perts = True
             elif isinstance(k, tuple) and k[0] == "Pk_grid":
                 kwargs = v.copy()

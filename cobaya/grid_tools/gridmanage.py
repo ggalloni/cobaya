@@ -167,7 +167,7 @@ def grid_getdist(args=None):
         "--exist", action="store_true", help="Silently skip all chains that don't exist"
     )
 
-    (batch, args) = opts.parseForBatch(args)
+    batch, args = opts.parseForBatch(args)
 
     ini_dir = batch.batchPath + "getdist" + os.sep
     os.makedirs(ini_dir, exist_ok=True)
@@ -265,7 +265,7 @@ def grid_cleanup(args=None):
     opts.parser.add_argument("--confirm", action="store_true")
     opts.parser.add_argument("--chainnum", default=None)
 
-    (_batch, args) = opts.parseForBatch(args)
+    _, args = opts.parseForBatch(args)
 
     sizeMB = 0
 
@@ -375,7 +375,7 @@ def grid_copy(args=None):
         help="make a zip file. Not needed if target_dir is a filename ending in .zip",
     )
 
-    (batch, args) = opts.parseForBatch(args)
+    batch, args = opts.parseForBatch(args)
 
     if args.target_dir.endswith(".zip"):
         args.zip = True
