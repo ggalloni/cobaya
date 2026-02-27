@@ -26,8 +26,8 @@ from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
 from packaging import version
+from scipy import stats
 
 from cobaya.conventions import (
     dump_sort_cosmetic,
@@ -153,8 +153,6 @@ class VersionCheckError(ValueError):
     Exception to be raised when the installed version of a component (or its requisites)
     is older than a reference one.
     """
-
-    pass  # necessary or it won't print the given error message!
 
 
 def check_module_version(module: Any, min_version):
