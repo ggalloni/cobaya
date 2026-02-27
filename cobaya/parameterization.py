@@ -201,20 +201,35 @@ class Parameterization(HasLogger):
         for p in chain(self._sampled, self._derived):
             if not is_valid_variable_name(p):
                 is_in = p in self._sampled
-                eg_in = f"  p_prime:\n    prior: ...\n  {p}: 'lambda p_prime: p_prime'\n"
-                eg_out = f"  p_prime: 'lambda {p}: {p}'\n"
+                is_input_func = p in self._input_funcs
+                if is_in or is_input_func:
+                    eg = (
+                        "  p_prime:\n"
+                        "    prior: ...\n"
+                        f"  {p}:\n"
+                        "    value: 'lambda p_prime: p_prime'\n"
+                        "    derived: False\n"
+                    )
+                    if is_in:
+                        msg = (
+                            "If this is an input parameter of a likelihood or "
+                            "theory, whose name you cannot change, define an "
+                            f"associated sampled one with a valid name:\n\n{eg}"
+                        )
+                    else:
+                        msg = (
+                            "This is an input parameter defined as a function. "
+                            f"Add 'derived: False' to prevent it being saved:\n\n{eg}"
+                        )
+                else:
+                    msg = (
+                        "If this is an output parameter of a likelihood or theory "
+                        "whose name you cannot change, do not request it as derived."
+                    )
                 raise LoggedError(
                     self.log,
-                    "Parameter name '%s' is not a valid Python variable name "
-                    "(it needs to start with a letter or '_').\n"
-                    "If this is an %s parameter of a likelihood or theory, "
-                    "whose name you cannot change,%s define an associated "
-                    "%s one with a valid name 'p_prime' as: \n\n%s",
-                    p,
-                    "input" if is_in else "output",
-                    "" if is_in else " remove it and",
-                    "sampled" if is_in else "derived",
-                    eg_in if is_in else eg_out,
+                    f"Parameter name '{p}' is not a valid Python variable name "
+                    f"(it needs to start with a letter or '_').\n{msg}",
                 )
 
         # input params depend on input and sampled only,
