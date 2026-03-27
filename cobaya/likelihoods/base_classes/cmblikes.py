@@ -382,8 +382,9 @@ class CMBlikes(DataSetLikelihood):
         else:
             self.cov = self.ReadCovmat(ini)
             self.covinv = np.linalg.inv(self.cov)
-            if self.marginalized_spectra:
-                self.marginalized_full_indices = []
+            self.marginalized_full_indices = []
+            self.covinv_marginalized = self.covinv
+            if getattr(self, "marginalized_spectra", None):
                 for b in range(self.nbins_used):
                     for idx in self.marginalized_cov_indices:
                         self.marginalized_full_indices.append(b * self.ncl_used + idx)
@@ -463,6 +464,20 @@ class CMBlikes(DataSetLikelihood):
                         break
         if self.binned:
             num_in = len(cl_in_index)
+            # Infer the file's actual stride from its dimensions
+            num_in_file = self.full_cov.shape[0] // self.nbins
+            if num_in != num_in_file:
+                # covmat_cl is a subset of the file ordering;
+                # remap cov_cl_used to file positions using cl_fiducial_order
+                file_order = ini.string("cl_fiducial_order", "").split()
+                covmat_spectra = covmat_cl.split()
+                file_positions = np.array(
+                    [file_order.index(covmat_spectra[i]) for i in cov_cl_used],
+                    dtype=int,
+                )
+            else:
+                num_in_file = num_in
+                file_positions = cov_cl_used
             pcov = np.empty(
                 (self.nbins_used * self.ncl_used, self.nbins_used * self.ncl_used)
             )
@@ -475,8 +490,8 @@ class CMBlikes(DataSetLikelihood):
                         covmat_scale
                         * self.full_cov[
                             np.ix_(
-                                (binx + self.bin_min) * num_in + cov_cl_used,
-                                (biny + self.bin_min) * num_in + cov_cl_used,
+                                (binx + self.bin_min) * num_in_file + file_positions,
+                                (biny + self.bin_min) * num_in_file + file_positions,
                             )
                         ]
                     )
