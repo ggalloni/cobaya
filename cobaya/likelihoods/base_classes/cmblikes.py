@@ -335,13 +335,19 @@ class CMBlikes(DataSetLikelihood):
         self.full_bandpower_headers, self.full_bandpowers, self.bandpowers = (
             self.read_cl_array(ini, "cl_hat", return_full=True)
         )
-        if self.like_approx in ("HL", "mHL"):
+        if self.like_approx in ("HL", "mHL", "cond"):
             self.cl_fiducial = self.read_cl_array(ini, "cl_fiducial")
         else:
             self.cl_fiducial = None
-        if self.like_approx == "mHL":
+        if self.like_approx in ("mHL", "cond"):
             self.marginalized_spectra = ini.list("marg_spectra", default=[])
-            self.log.warning("Marginalizing over spectra: %s", self.marginalized_spectra)
+            if self.like_approx == "mHL":
+                self.log.warning("Marginalizing over spectra: %s", self.marginalized_spectra)
+            else:
+                self.log.warning(
+                    "Conditional mode: computing chi2 of %s conditioned on the rest",
+                    self.marginalized_spectra,
+                )
         includes_noise = ini.bool("cl_hat_includes_noise", False)
         self.cl_noise = None
         if self.like_approx != "gaussian" or includes_noise:
@@ -391,6 +397,27 @@ class CMBlikes(DataSetLikelihood):
                 cov_reduced = np.delete(self.cov, self.marginalized_full_indices, axis=0)
                 cov_reduced = np.delete(cov_reduced, self.marginalized_full_indices, axis=1)
                 self.covinv_marginalized = np.linalg.inv(cov_reduced)
+                if self.like_approx == "cond":
+                    # Precompute Schur complement for conditional mode
+                    # Partition: auto = marginalized indices, rest = everything else
+                    n = self.cov.shape[0]
+                    auto_idx = np.array(self.marginalized_full_indices)
+                    rest_idx = np.delete(np.arange(n), auto_idx)
+                    C_auto_auto = self.cov[np.ix_(auto_idx, auto_idx)]
+                    C_auto_rest = self.cov[np.ix_(auto_idx, rest_idx)]
+                    C_rest_rest_inv = self.covinv_marginalized  # already computed
+                    # Schur complement: C_{auto|rest} = C_aa - C_ar C_rr^{-1} C_ra
+                    self._cond_schur = C_auto_auto - C_auto_rest @ C_rest_rest_inv @ C_auto_rest.T
+                    self._cond_schur_inv = np.linalg.inv(self._cond_schur)
+                    # Precompute C_ar C_rr^{-1} for conditional mean
+                    self._cond_gain = C_auto_rest @ C_rest_rest_inv
+                    self._cond_auto_idx = auto_idx
+                    self._cond_rest_idx = rest_idx
+                    self.log.warning(
+                        "Conditional mode: %d auto-spectrum elements, "
+                        "%d rest elements, Schur complement shape %s",
+                        len(auto_idx), len(rest_idx), self._cond_schur.shape,
+                    )
         if "linear_correction_fiducial_file" in ini.params:
             self.fid_correction = self.read_cl_array(ini, "linear_correction_fiducial")
             self.linear_correction = self.read_bin_windows(
@@ -435,7 +462,7 @@ class CMBlikes(DataSetLikelihood):
         self.full_cov = np.loadtxt(ini.relativeFileName("covmat_fiducial"))
         covmat_scale = ini.float("covmat_scale", 1.0)
         cl_in_index = self.UseString_to_cols(covmat_cl)
-        if self.like_approx == "mHL":
+        if self.like_approx in ("mHL", "cond"):
             self.marginalized_indices = []
             for spec in self.marginalized_spectra:
                 if spec not in covmat_cl:
@@ -455,7 +482,7 @@ class CMBlikes(DataSetLikelihood):
                 self.cl_used_index[ix] = index
                 cov_cl_used[ix] = i
                 ix += 1
-        if self.like_approx == "mHL":
+        if self.like_approx in ("mHL", "cond"):
             self.marginalized_cov_indices = []
             for marg_idx in self.marginalized_indices:
                 for ix, spectrum_idx in enumerate(cov_cl_used):
@@ -713,7 +740,7 @@ class CMBlikes(DataSetLikelihood):
             if self.like_approx == "exact":
                 chisq += self.exact_chi_sq(C, self.bandpower_matrix[b], self.bin_min + b)
                 continue
-            elif self.like_approx in ("HL", "mHL"):
+            elif self.like_approx in ("HL", "mHL", "cond"):
                 try:
                     self.transform(
                         C, self.bandpower_matrix[b], self.fiducial_sqrt_matrix[b]
@@ -730,6 +757,13 @@ class CMBlikes(DataSetLikelihood):
         elif self.like_approx == "mHL":
             big_x_reduced = np.delete(big_x, self.marginalized_full_indices)
             return -0.5 * self._fast_chi_squared(self.covinv_marginalized, big_x_reduced)
+        elif self.like_approx == "cond":
+            # Conditional chi2: chi2_{auto|rest}
+            x_auto = big_x[self._cond_auto_idx]
+            x_rest = big_x[self._cond_rest_idx]
+            # Conditional mean: E[x_auto | x_rest] = C_ar C_rr^{-1} x_rest
+            x_auto_cond = x_auto - self._cond_gain @ x_rest
+            return -0.5 * self._fast_chi_squared(self._cond_schur_inv, x_auto_cond)
         return -0.5 * self._fast_chi_squared(self.covinv, big_x)
 
 
