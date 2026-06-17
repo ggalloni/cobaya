@@ -348,7 +348,6 @@ class CMBlikes(DataSetLikelihood):
                     "Conditional mode: computing chi2 of %s conditioned on the rest",
                     self.marginalized_spectra,
                 )
-            self.hl_mean_correction = ini.bool("hl_mean_correction", False)
         includes_noise = ini.bool("cl_hat_includes_noise", False)
         self.cl_noise = None
         if self.like_approx != "gaussian" or includes_noise:
@@ -454,61 +453,6 @@ class CMBlikes(DataSetLikelihood):
         self.aberration_coeff = ini.float("aberration_coeff", 0.0)
 
         self.map_cls = self.init_map_cls(self.nmaps_required, self.required_order)
-
-        if getattr(self, "hl_mean_correction", False) and self.like_approx in (
-            "mHL",
-            "cond",
-        ):
-            self._compute_hl_mean_correction()
-
-    def _compute_hl_mean_correction(self):
-        """Second-order mean of the HL-transformed bandpowers, per bin.
-
-        The HL variable X = Cf^{1/2} g(C^{-1/2} Chat C^{-1/2}) Cf^{1/2} is not
-        exactly zero-mean: expanding g(I+eps)=eps-eps^2/3 gives
-        <X> = -1/3 Cf^{1/2} <eps^2> Cf^{1/2}, with eps = Cf^{-1/2} dChat Cf^{-1/2}.
-        For p stacked fields this is -(p+1)/(3 nu) Cf in the full-sky Wishart limit;
-        here <eps^2> is obtained by whitening the actual (cut-sky) bandpower
-        covariance self.cov, so no simulations are needed. Only the elements that
-        enter big_x are corrected; the result is stored as self.hl_mean_X and
-        subtracted from big_x in the mHL/cond likelihood (not the full HL).
-        """
-        nmaps = self.nmaps
-        elem_pos = [(i, j) for i in range(nmaps) for j in range(i + 1)]
-        used_pos = [elem_pos[idx] for idx in self.cl_used_index]
-        self.hl_mean_X = np.zeros(self.nbins_used * self.ncl_used)
-        vecp = np.empty(self.ncl)
-        for b in range(self.nbins_used):
-            cfhalf = self.fiducial_sqrt_matrix[b]
-            cf = cfhalf.dot(cfhalf)
-            dF, UF = np.linalg.eigh(cf)
-            cinvhalf = (UF / np.sqrt(dF)).dot(UF.T)
-            blk = self.cov[
-                b * self.ncl_used : (b + 1) * self.ncl_used,
-                b * self.ncl_used : (b + 1) * self.ncl_used,
-            ]
-            cov4 = np.zeros((nmaps, nmaps, nmaps, nmaps))
-            for k1, (a, bb) in enumerate(used_pos):
-                for k2, (c, d) in enumerate(used_pos):
-                    v = blk[k1, k2]
-                    for (A, B) in {(a, bb), (bb, a)}:
-                        for (C, D) in {(c, d), (d, c)}:
-                            cov4[A, B, C, D] = v
-            cov_eps = np.einsum(
-                "ia,bj,kc,dl,abcd->ijkl",
-                cinvhalf,
-                cinvhalf,
-                cinvhalf,
-                cinvhalf,
-                cov4,
-                optimize=True,
-            )
-            eps2 = np.einsum("ijjk->ik", cov_eps)
-            mu_mat = -(1.0 / 3.0) * cfhalf.dot(eps2).dot(cfhalf)
-            self.matrix_to_elements(mu_mat, vecp)
-            self.hl_mean_X[b * self.ncl_used : (b + 1) * self.ncl_used] = vecp[
-                self.cl_used_index
-            ]
 
     def ReadCovmat(self, ini):
         """Read the covariance matrix, and the array of which CL are in the covariance,
@@ -812,15 +756,11 @@ class CMBlikes(DataSetLikelihood):
             big_x[b * self.ncl_used : (b + 1) * self.ncl_used] = vecp[self.cl_used_index]
         if self.like_approx == "exact":
             return -0.5 * chisq
-        elif self.like_approx == "mHL":
-            if getattr(self, "hl_mean_correction", False):
-                big_x = big_x - self.hl_mean_X
+        if self.like_approx == "mHL":
             big_x_reduced = np.delete(big_x, self.marginalized_full_indices)
             return -0.5 * self._fast_chi_squared(self.covinv_marginalized, big_x_reduced)
         elif self.like_approx == "cond":
             # Conditional chi2: chi2_{auto|rest}
-            if getattr(self, "hl_mean_correction", False):
-                big_x = big_x - self.hl_mean_X
             x_auto = big_x[self._cond_auto_idx]
             x_rest = big_x[self._cond_rest_idx]
             # Conditional mean: E[x_auto | x_rest] = mu_auto + C_ar C_rr^{-1} (x_rest - mu_rest)
