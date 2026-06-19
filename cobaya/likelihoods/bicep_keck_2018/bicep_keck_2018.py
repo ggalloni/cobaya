@@ -239,6 +239,7 @@ class bicep_keck_2018(CMBlikes):
         Async = data_params["BBsync"]
         alphadust = data_params["BBalphadust"]
         betadust = data_params["BBbetadust"]
+        betadust_auto = data_params.get("BBbetadust_auto", betadust)
         Tdust = data_params["BBTdust"]
         alphasync = data_params["BBalphasync"]
         betasync = data_params["BBbetasync"]
@@ -250,8 +251,12 @@ class bicep_keck_2018(CMBlikes):
         gamma_corr = data_params["gamma_corr"]  # 13
 
         # Calculate dust and sync scaling for each map.
+        # If BBbetadust_auto is provided, compute separate scalings for
+        # auto-spectra (i==j) vs cross-spectra (i!=j).
+        split_betadust = abs(betadust_auto - betadust) > 1e-10
         bandcenter_err = np.empty(self.nmaps_required)
         fdust = np.empty(self.nmaps_required)
+        fdust_auto = np.empty(self.nmaps_required)
         fsync = np.empty(self.nmaps_required)
         for i, mapname in enumerate(self.used_map_order):
             # Read and assign values to band center error params
@@ -266,6 +271,11 @@ class bicep_keck_2018(CMBlikes):
             fdust[i] = self.dust_scaling(
                 betadust, Tdust, self.bandpasses[i], self.fpivot_dust, bandcenter_err[i]
             )
+            if split_betadust:
+                fdust_auto[i] = self.dust_scaling(
+                    betadust_auto, Tdust, self.bandpasses[i], self.fpivot_dust,
+                    bandcenter_err[i]
+                )
             fsync[i] = self.sync_scaling(
                 betasync, self.bandpasses[i], self.fpivot_sync, bandcenter_err[i]
             )
@@ -287,7 +297,10 @@ class bicep_keck_2018(CMBlikes):
                 BB = CL.theory_ij[0] == 2 and CL.theory_ij[1] == 2
 
                 if EE or BB:
-                    dust = fdust[i] * fdust[j]
+                    if split_betadust and i == j:
+                        dust = fdust_auto[i] * fdust_auto[j]
+                    else:
+                        dust = fdust[i] * fdust[j]
                     sync = fsync[i] * fsync[j]
                     dustsync = fdust[i] * fsync[j] + fsync[i] * fdust[j]
 

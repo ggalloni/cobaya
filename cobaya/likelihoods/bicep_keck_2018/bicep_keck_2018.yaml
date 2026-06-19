@@ -131,6 +131,12 @@ params:
   #   latex: 2EE_{\mathrm{dust}}/BB_{\mathrm{dust}}
   EEtoBB_sync: 2
   #   latex: 2EE_{\mathrm{sync}}/BB_{\mathrm{sync}}
+  # dust SED power law index for auto-spectra only (i==j)
+  # When set to a sampled parameter, allows different dust SED for auto vs cross.
+  # Defaults to BBbetadust (no split) when left as "auto".
+  BBbetadust_auto:
+    value: "lambda BBbetadust: BBbetadust"
+    derived: false
   # dust blackbody temperature [K] -- fixed / very insensitive to this
   BBTdust: 19.6
   #   latex: T_{\mathrm{dust}}
