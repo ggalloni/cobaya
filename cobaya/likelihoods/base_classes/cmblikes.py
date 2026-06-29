@@ -387,13 +387,34 @@ class CMBlikes(DataSetLikelihood):
             self.fsky = ini.float("fullsky_exact_fksy")
         else:
             self.cov = self.ReadCovmat(ini)
+            # Drop individual bandpower cells entirely (data vector + covariance)
+            # before any marg/cond partition; downstream indices use reduced space.
+            self.kept_indices = None
+            remap = None
+            if getattr(self, "dropped_full_indices", None):
+                full_n = self.nbins_used * self.ncl_used
+                dropped = set(self.dropped_full_indices)
+                kept = [i for i in range(full_n) if i not in dropped]
+                self.kept_indices = np.array(kept, dtype=int)
+                remap = {full: red for red, full in enumerate(kept)}
+                self.cov = self.cov[np.ix_(kept, kept)]
+                self.log.warning(
+                    "Dropping %d bandpower cell(s); covariance reduced to %s",
+                    len(dropped), self.cov.shape,
+                )
             self.covinv = np.linalg.inv(self.cov)
             self.marginalized_full_indices = []
             self.covinv_marginalized = self.covinv
             if getattr(self, "marginalized_spectra", None):
                 for b in range(self.nbins_used):
                     for idx in self.marginalized_cov_indices:
-                        self.marginalized_full_indices.append(b * self.ncl_used + idx)
+                        full = b * self.ncl_used + idx
+                        if remap is not None:
+                            if full not in remap:
+                                continue  # this cell was dropped
+                            self.marginalized_full_indices.append(remap[full])
+                        else:
+                            self.marginalized_full_indices.append(full)
                 cov_reduced = np.delete(self.cov, self.marginalized_full_indices, axis=0)
                 cov_reduced = np.delete(cov_reduced, self.marginalized_full_indices, axis=1)
                 self.covinv_marginalized = np.linalg.inv(cov_reduced)
@@ -489,6 +510,32 @@ class CMBlikes(DataSetLikelihood):
                     if spectrum_idx == marg_idx:
                         self.marginalized_cov_indices.append(ix)
                         break
+        # Optionally drop individual (spectrum, bin) bandpower cells entirely.
+        # Each entry is "SpectrumName:bin" with bin 1-based within the used bins.
+        self.dropped_full_indices = []
+        drop_points = ini.list("drop_points", default=[])
+        if drop_points:
+            covmat_spectra = covmat_cl.split()
+            for entry in drop_points:
+                spec, binstr = str(entry).rsplit(":", 1)
+                b = int(binstr) - 1
+                if not 0 <= b < self.nbins_used:
+                    raise LoggedError(
+                        self.log, "drop_points bin %s out of range" % binstr
+                    )
+                if spec not in covmat_spectra:
+                    raise LoggedError(
+                        self.log, "drop_points spectrum %s not in covmat_cl" % spec
+                    )
+                marg_index = covmat_spectra.index(spec)
+                used_ix = next(
+                    (ix for ix, s in enumerate(cov_cl_used) if s == marg_index), None
+                )
+                if used_ix is None:
+                    raise LoggedError(
+                        self.log, "drop_points spectrum %s not in used set" % spec
+                    )
+                self.dropped_full_indices.append(b * self.ncl_used + used_ix)
         if self.binned:
             num_in = len(cl_in_index)
             # Infer the file's actual stride from its dimensions
@@ -756,6 +803,8 @@ class CMBlikes(DataSetLikelihood):
             big_x[b * self.ncl_used : (b + 1) * self.ncl_used] = vecp[self.cl_used_index]
         if self.like_approx == "exact":
             return -0.5 * chisq
+        if getattr(self, "kept_indices", None) is not None:
+            big_x = big_x[self.kept_indices]
         if self.like_approx == "mHL":
             big_x_reduced = np.delete(big_x, self.marginalized_full_indices)
             return -0.5 * self._fast_chi_squared(self.covinv_marginalized, big_x_reduced)
